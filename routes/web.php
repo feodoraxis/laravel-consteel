@@ -29,7 +29,10 @@ Route::group(
         'namespace' => 'catalog',
     ],
     function () {
+        Route::get('/search/', [CatalogController::class, 'search'])->name("Catalog.search");
+
         Route::get('/{slug}/', [CatalogController::class, 'category'])->name("Catalog.category");
+        Route::get('/{slug}/{product}.html', [CatalogController::class, 'detail'])->name("Catalog.detail");
     }
 );
 

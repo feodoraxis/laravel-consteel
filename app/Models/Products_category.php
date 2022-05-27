@@ -2,7 +2,6 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
@@ -15,6 +14,27 @@ class Products_category extends Model
     static public function index()
     {
 
+    }
+
+    static public function getCategoryBy( string $option, $value, array $select = [] ):array
+    {
+        $query = self::query();
+
+        if ( !empty( $select ) ) {
+            $query->select( $select );
+        }
+
+        $result = $query
+            ->where($option, '=', $value)
+            ->get();
+
+        $result = json_decode($result, true);
+
+        if ( json_last_error() || empty(reset($result)) ) {
+            return [];
+        }
+
+        return reset($result);
     }
 
     /**
@@ -237,7 +257,6 @@ class Products_category extends Model
      */
     static public function subcategories( string $category_slug ):string
     {
-
         self::getHierarchicalTree($category_slug);
 
         if ( !isset(self::$hierarchical_tree['after']) || !is_array(self::$hierarchical_tree['after']) ) {

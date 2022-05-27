@@ -89,15 +89,15 @@ jQuery(function($) {
 
     $("#catalog-sort li").on('click', function( e ) {
         let value = $(this).attr('data-value'),
-            url = window.location.href,
-            get = '?';
+            url = window.location.pathname + '?sort=' + value;
 
-        if ( url.lastIndexOf('?') > 0 ) {
-            get = '&';
-        }
+        window.location.href = url;
+    });
 
-        get += 'sort=' + value;
-        url += get;
+    $("#catalog-quantity li").on('click', function( e ) {
+        let value = $(this).attr('data-value'),
+            url = window.location.pathname + '?sort=' + value;
+
         window.location.href = url;
     });
 });

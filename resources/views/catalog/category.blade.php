@@ -58,12 +58,12 @@
                                                     <input type="hidden">
                                                     <div class="sort__item-label">
                                                         <span>Сортировка:</span>
-                                                        <span class="before">сначала подороже</span>
+                                                        <span class="before">{{ $page_data['sort'] }}</span>
                                                     </div>
                                                     <div class="sort__item-select" id="catalog-sort">
                                                         <ul>
-                                                            <li data-value="price-asc">сначала подороже</li> <!-- ASC -- от большего к меньшему. -->
-                                                            <li data-value="price-desc">Сначала подешевле</li>
+                                                            <li data-value="price-desc">сначала подороже</li> <!-- desc -- от большего к меньшему. -->
+                                                            <li data-value="price-asc">Сначала подешевле</li>
                                                             <li data-value="popular">Сначала популярные</li>
                                                         </ul>
                                                     </div>
@@ -76,10 +76,10 @@
                                                         <span>Группировка:</span>
                                                         <span class="before">по наличию</span>
                                                     </div>
-                                                    <div class="sort__item-select">
+                                                    <div class="sort__item-select" id="catalog-quantity">
                                                         <ul>
-                                                            <li>по наличию</li>
-                                                            <li>по отсутствию</li>
+                                                            <li data-value="has">по наличию</li>
+                                                            <li data-value="has-not">по отсутствию</li>
                                                         </ul>
                                                     </div>
                                                 </div>

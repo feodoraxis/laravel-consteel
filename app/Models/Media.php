@@ -17,7 +17,19 @@ class Media extends Model
     {
         $object = self::query()->where('id', '=', $media_id)->first();
 
-        $array = json_decode($object, true);
+        return self::handleObjects($object);
+    }
+
+    public static function getThumbnailsData(array $media_ids)
+    {
+        $objects = self::query()->whereIn('id', $media_ids)->get();
+
+        return self::handleObjects($objects);
+    }
+
+    private static function handleObjects( $objects )
+    {
+        $array = json_decode($objects, true);
 
         if ( !empty($array) && !json_last_error() ) {
             return $array;

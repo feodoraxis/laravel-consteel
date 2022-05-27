@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
 class Products extends Model
@@ -24,9 +25,16 @@ class Products extends Model
 
     const CHARACTERISTICS_OPTIONS__TABLE_NAME = 'products_characteristics_options';
 
-    private $posts_per_page = 16;
-    private $current_page   = 1;
-    private $categories = [];
+    const PARAMETER_BRAND_ID = 1;
+
+    const VIEWED_PRODUCTS_COOKIE_NAME = 'VIEWED_PRODUCTS';
+
+    const SEARCH_VARCHAR_NAME = 'search';
+
+    private $posts_per_page  = 16;
+    private $current_page    = 1;
+    private $categories      = [];
+    private $viewed_products = [];
 
     public function __construct()
     {
@@ -70,6 +78,117 @@ class Products extends Model
         return $this->categories;
     }
 
+    /**
+     * @param int $product_id
+     * @return array
+     */
+    private function viewedProducts(int $product_id):array
+    {
+        if ( isset($_COOKIE[ self::VIEWED_PRODUCTS_COOKIE_NAME ]) && !empty($_COOKIE[ self::VIEWED_PRODUCTS_COOKIE_NAME ]) ) {
+            $this->viewed_products = json_decode($_COOKIE[ self::VIEWED_PRODUCTS_COOKIE_NAME ], true);
+
+            if ( json_last_error() ) {
+                $this->viewed_products = [];
+            }
+        }
+
+        $this->viewed_products[ $product_id ] = [
+            'product_id' => $product_id,
+            'time' => time()
+        ];
+
+        usort($this->viewed_products, function($a, $b) {
+            return ($a['time'] - $b['time']);
+        });
+
+        if ( count($this->viewed_products) > 4 ) {
+            array_shift($this->viewed_products);
+        }
+
+        foreach ($this->viewed_products as $item) {
+            $viewed_products[] = $item['product_id'];
+        }
+
+        setcookie( self::VIEWED_PRODUCTS_COOKIE_NAME, json_encode($this->viewed_products) );
+
+        return $viewed_products;
+    }
+
+    /**
+     * @param $slug
+     * @return array
+     */
+    public function getBySlug( $slug ):array
+    {
+        $result = self::query()
+            ->where(self::getTable() . '.slug', '=', $slug)
+            ->get();
+
+        $result = self::handleObjects($result, false);
+
+        if ( !empty($result['characteristics']) ) {
+            $result['characteristics'] = json_decode($result['characteristics'], true);
+
+            if ( isset($result['characteristics']) && !empty($result['characteristics']) && is_array($result['characteristics']) && !json_last_error() ) {
+
+                $chars_ids = $characteristics = [];
+
+                foreach ($result['characteristics'] as $characteristic) {
+                    foreach ( $characteristic as $key => $item ) {
+                        $chars_ids[] = $key;
+                        $characteristics[ $key ] = $item;
+                    }
+                }
+                $result['characteristics'] = $characteristics;
+                $characteristics = [];
+
+                $parameters = Products_characteristics_options::getbyIds( $chars_ids );
+
+                if ( empty($parameters) ) {
+                    return $result;
+                }
+
+                foreach ($parameters as $parameter) {
+                    $characteristics[ $parameter['id'] ] = array_merge($parameter, [
+                        'value' => $result['characteristics'][ $parameter['id'] ]
+                    ]);
+
+                    if ( self::PARAMETER_BRAND_ID == $parameter['id'] ) {
+                        $result['brand'] = $characteristics[ $parameter['id'] ];
+                    }
+                }
+                $result['characteristics'] = $characteristics;
+            }
+        }
+
+        if ( intval($result['category']) > 0 ) {
+            $similar_products = self::query()
+                ->where('category', '=', $result['category'] )
+                ->inRandomOrder()
+                ->limit(8)
+                ->get();
+
+            $result['similar_products'] = self::handleObjects($similar_products);
+        }
+
+        $viewed_products_ids = $this->viewedProducts( $result['id'] );
+
+        if ( !empty($viewed_products_ids) ) {
+            $viewed_products = self::query()
+                ->whereIn('id', $viewed_products_ids)
+                ->get();
+
+            $result['viewed_products'] = self::handleObjects($viewed_products);
+        }
+
+        return $result;
+    }
+
+    /**
+     * @param int $category_id
+     * @param string $filter
+     * @return array
+     */
     public function getListByCategoryId( int $category_id, string $filter = '' ) : array
     {
         $offset = ($this->current_page-1) * $this->posts_per_page;
@@ -108,8 +227,26 @@ class Products extends Model
             }
         }
 
-        $query->orderBy('sort')
-            ->offset( $offset )
+        if ( isset( $_REQUEST['sort'] ) ) {
+            switch ($_REQUEST['sort']) {
+                case 'price-asc':
+                    $query->orderBy('price');
+                    break;
+                case 'price-desc':
+                    $query->orderBy('price', 'desc');
+                    break;
+                case 'has':
+                    $query->orderBy('quantity');
+                    break;
+                case 'has-not':
+                    $query->orderBy('quantity', 'desc');
+                    break;
+            }
+        } else {
+            $query->orderBy('sort');
+        }
+
+        $query->offset( $offset )
             ->limit( $this->posts_per_page );
 
         $result = $query->get();
@@ -124,18 +261,30 @@ class Products extends Model
     public function filterRender( int $category_id ):array
     {
         $this->setCategories( $category_id );
+        $where = [
+            ['status', '=', self::STATUS_PUBLISHED],
+            ['characteristics', '!=', ''],
+            ['characteristics', '!=', '1'],
+            ['characteristics', '!=', '{}'],
+            ['characteristics', '!=', '[]'],
+        ];
+
+        $category = Products_category::getCategoryBy('id', $category_id, ['filter']);
+        $filter = json_decode($category['filter'], true);
+
+        if ( !json_last_error() && !empty($filter) ) {
+            foreach ($filter as $item) {
+                $where[] = ['characteristics' , 'like' , '%{"' . $item . '":"%"}%'];
+            }
+        } else {
+            $filter = [];
+        }
 
         $result = self::query()
             ->select('characteristics', 'sort')
             ->distinct()
             ->whereIn('category', $this->categories)
-            ->where([
-                ['status', '=', self::STATUS_PUBLISHED],
-                ['characteristics', '!=', ''],
-                ['characteristics', '!=', '1'],
-                ['characteristics', '!=', '{}'],
-                ['characteristics', '!=', '[]'],
-            ])
+            ->where( $where )
             ->orderBy('sort')
             ->get();
 
@@ -147,27 +296,39 @@ class Products extends Model
 
         $chars_ids = $chars_values = $check_chars_values = [];
         foreach ( $data as $item ) {
-            $json = json_decode($item['characteristics'], true);
-            if ( is_array($json) && !json_last_error() ) {
-                foreach ( $json as $val ) {
+            $characteristics = json_decode($item['characteristics'], true);
+
+            if ( is_array($characteristics) && !json_last_error() ) {
+
+                foreach ( $characteristics as $val ) {
+
                     foreach ( $val as $key => $v ) {
-                        if ( !in_array($key , $chars_ids) ) {
-                            $chars_ids[] = $key;
+
+                        if ( empty($filter) || in_array($key, $filter) ) {
+
+                            if ( !in_array($key , $chars_ids) ) {
+                                $chars_ids[] = $key;
+                            }
+
+                            if ( !isset($check_chars_values[ $key ]) ) {
+                                $chars_values[ $key ] = $check_chars_values[ $key ] = [];
+                            }
+
+                            if ( !in_array($v , $check_chars_values[ $key ]) ) {
+                                $chars_values[ $key ][] = [
+                                    'name' => $v,
+                                    'checked' => isset($_REQUEST['filter'][ $key ]) && in_array($v, $_REQUEST['filter'][ $key ]) ? ' checked' : '',
+                                ];
+
+                                $check_chars_values[ $key ][] = $v;
+                            }
+
                         }
 
-                        if ( !isset($check_chars_values[ $key ]) ) {
-                            $chars_values[ $key ] = $check_chars_values[ $key ] = [];
-                        }
-
-                        if ( !in_array($v , $check_chars_values[ $key ]) ) {
-                            $chars_values[ $key ][] = [
-                                'name' => $v,
-                                'checked' => isset($_REQUEST['filter'][ $key ]) && in_array($v, $_REQUEST['filter'][ $key ]) ? ' checked' : '',
-                            ];
-                            $check_chars_values[ $key ][] = $v;
-                        }
                     }
+
                 }
+
             }
         }
 
@@ -185,8 +346,6 @@ class Products extends Model
         foreach ( $chars_data as &$item ) {
             $item['values'] = $chars_values[ $item['id'] ];
         }
-
-//        dd($chars_data);
 
         return $chars_data;
     }
@@ -265,8 +424,20 @@ class Products extends Model
             $item['thumbnail_detail'] = Media::getThumbnailData($item['thumbnail_detail']);
             $item['price'] = self::handlePrice($item['price']);
 
+            if ( $multiple === false ) {
+
+                if ( !empty($item['gallery']) && is_array(json_decode($item['gallery'], true)) ) {
+                    $gallery = json_decode($item['gallery'], true);
+                }
+
+                if ( isset($gallery) && !json_last_error() ) {
+                    $item['gallery'] = Media::getThumbnailsData($gallery);
+                    unset($gallery);
+                }
+            }
+
             if ( !empty($item['price_discount']) && $item['price_discount'] !== '0.00' ) {
-                $item['price_discount'] = self::handlePrice($item['price_discount']);
+                $item['price_discount'] = self::handlePrice($item['price_discount'], $multiple);
             }
         }
         unset($item);
@@ -280,15 +451,24 @@ class Products extends Model
 
     /**
      * @param string $original_price
+     * @param bool $use_span
      * @return array
      */
-    private static function handlePrice( string $original_price ):array
+    private static function handlePrice( string $original_price, bool $use_span = true ):array
     {
+        if ( $use_span === true ) {
+            $html_before = '<span>';
+            $html_after = '</span><span> ₽</span>';
+        } else {
+            $html_before = '';
+            $html_after = ' ₽';
+        }
+
         if ( strripos( $original_price, '.00' ) ) {
-            $html = '<span>' . number_format(intval($original_price), 2, '.', ' ') . '</span><span> ₽</span>';
+            $html = $html_before . number_format(intval($original_price), 2, '.', ' ') . $html_after;
         } else {
             $price = explode('.', $original_price);
-            $html = '<span>' . number_format(intval($price['0']), 0, '.', ' ') . '.' . $price['1'] . '</span><span> ₽</span>';
+            $html = $html_before . number_format(intval($price['0']), 0, '.', ' ') . '.' . $price['1'] . $html_after;
         }
 
         return [

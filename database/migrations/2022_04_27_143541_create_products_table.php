@@ -25,6 +25,7 @@ class CreateProductsTable extends Migration
             $table->decimal('price', 10, 2, true);
             $table->decimal('price_discount', 10, 2, true);
             $table->text('description');
+            $table->text('description_detail');
             $table->mediumInteger('quantity')->unsigned();
             $table->string('files', 255); //JSON
             $table->enum("type", [ Products::TYPE_SIMPLE, Products::TYPE_VARIABLE ]);
