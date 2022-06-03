@@ -9,6 +9,32 @@ class Catalog extends Model
 {
     use HasFactory;
 
+    const SEARCH_VARCHAR_NAME = 'search';
+
+    public static function search():array
+    {
+        $output = [
+            'list' => [],
+            'count' => '0',
+            'search_request' => '',
+        ];
+
+        if ( !isset($_REQUEST[ self::SEARCH_VARCHAR_NAME ]) || empty($_REQUEST[ self::SEARCH_VARCHAR_NAME ]) ) {
+            return $output;
+        }
+
+        $search_request = htmlspecialchars($_REQUEST[ self::SEARCH_VARCHAR_NAME ]);
+
+        $Products = new Products;
+
+        $output['list']           = $Products->getListBySearchRequest( $search_request );
+        $output['count']          = count($output['list']);
+        $output['search_request'] = $search_request;
+        $output['pagination']     = $Products->paginationBySearchRequest( $search_request );
+
+        return $output;
+    }
+
     /**
      * @string $product_slug
      * @param string $product_slug

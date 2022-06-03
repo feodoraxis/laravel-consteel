@@ -17,7 +17,7 @@
             <h1>{{ $page_data['name'] }}</h1>
         </div>
         <div class="product-compare before">
-            <button>Добавить к сравнению</button>
+            <button id="compare" class="{{ $item['compare_class'] ?? '' }}" data-id="{{ $page_data['id'] }}">Добавить к сравнению</button>
         </div>
         <div class="product-data">
             <div class="row">

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Compare;
 use App\Models\Option;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Illuminate\Foundation\Bus\DispatchesJobs;
@@ -14,6 +15,11 @@ class Controller extends BaseController
 
     public function getMainData()
     {
-        return Option::getMainOptionsList();
+        $options = Option::getMainOptionsList();
+
+        $compare = new Compare();
+        $options['compare'] = $compare->getCount();
+
+        return $options;
     }
 }

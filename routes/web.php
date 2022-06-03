@@ -4,6 +4,7 @@ use App\Http\Controllers\AjaxController;
 use App\Http\Controllers\MainController;
 use App\Http\Controllers\PageController;
 use App\Http\Controllers\CatalogController;
+use App\Http\Controllers\CompareController;
 use App\Models\Products_category;
 use Illuminate\Support\Facades\Route;
 
@@ -36,6 +37,8 @@ Route::group(
     }
 );
 
+Route::get('/compare/', [CompareController::class, 'index'])->name("Compare.index");
+
 Route::group(
     [
         'prefix' => 'ajax',
@@ -47,7 +50,13 @@ Route::group(
 
         Route::post('/catalog/', [AjaxController::class, 'catalog'])->name("Ajax.catalog");
 
+        Route::post('/search/', [AjaxController::class, 'search'])->name("Ajax.search");
+        Route::post('/search-load/', [AjaxController::class, 'searchLoad'])->name("Ajax.searchLoad");
+
         Route::post('/filter/', [AjaxController::class, 'filter'])->name("Ajax.filter");
+
+        Route::post('/compare/toggle/', [AjaxController::class, 'compareToggle'])->name("Ajax.compareToggle");
+        Route::post('/compare/clear/',  [AjaxController::class, 'compareClear'] )->name("Ajax.compareClear" );
     }
 );
 

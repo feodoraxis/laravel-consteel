@@ -4,7 +4,6 @@ namespace App\Http\Controllers;
 
 use App\Models\Catalog;
 use App\Models\Menu;
-use App\Models\Products;
 use App\Models\Products_category;
 
 class CatalogController extends Controller
@@ -15,8 +14,7 @@ class CatalogController extends Controller
         $main_data['logo'] = '/img/logo-dark.png';
 
         return view('catalog.search', [
-            'page_data'     => Products::search(),
-
+            'page_data'     => Catalog::search(),
             'main_data'     => $main_data,
             'top_menu'      => Menu::getMenu(),
             'catalog_menu'  => Products_category::get(),

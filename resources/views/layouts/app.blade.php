@@ -32,7 +32,11 @@
                     </div>
                     <div class="main__header-shop">
                         <div class="main__header-compare">
-                            <div class="compare"><a href="#">Сравнение <span>2</span></a></div>
+                            <div class="compare">
+
+                                <a href="/compare/">Сравнение @if ( $main_data['compare'] > 0 )<span>{{ $main_data['compare'] }}@endif</span></a>
+
+                            </div>
                         </div>
                         <div class="main__header-cart">
                             <div class="mini__cart"><a href="cart.html">5 256 ₽ <span>4</span></a></div>
@@ -77,12 +81,13 @@
                             <div class="hamburger" id="hamburger"></div>
                         </div>
                     </div>
-                </div><!-- Чтобы открыть результаты элементу .main__search добавить .active -->
-                <div class="main__search before active" id="main_search">
-                    <form>
-                        <input type="text" placeholder="Что вы хотите найти?">
-                    </form><!-- новое -->
-                    <div class="main__search-result">
+                </div>
+                <!-- Чтобы открыть результаты элементу .main__search добавить .active -->
+                <div class="main__search before" id="main_search">
+                    <form method="get" action="/catalog/search/">
+                        <input type="text" name="search" id="main_search_input" placeholder="Что вы хотите найти?">
+                    </form>
+                    <div class="main__search-result" id="main__search_result">
                         <div class="main__search-categories"><b>Категории</b>
                             <div class="catalog__categoryes">
                                 <ul>
@@ -92,54 +97,9 @@
                                 </ul>
                             </div>
                         </div>
-                        <div class="main__search-list"><b>Товары</b>
-                            <ul>
-                                <li><a href="#">
-                                        <div class="main__search-thumb"> <img src="img/product/mini.jpg"></div>
-                                        <div class="main__search-content"><b>HYGIECODE LMC</b>
-                                            <p>24 030 ₽</p>
-                                        </div></a></li>
-                                <li><a href="#">
-                                        <div class="main__search-thumb"> <img src="img/product/mini.jpg"></div>
-                                        <div class="main__search-content"><b>HYGIECODE LMC</b>
-                                            <p>24 030 ₽</p>
-                                        </div></a></li>
-                                <li><a href="#">
-                                        <div class="main__search-thumb"> <img src="img/product/mini.jpg"></div>
-                                        <div class="main__search-content"><b>HYGIECODE LMC</b>
-                                            <p>24 030 ₽</p>
-                                        </div></a></li>
-                                <li><a href="#">
-                                        <div class="main__search-thumb"> <img src="img/product/mini.jpg"></div>
-                                        <div class="main__search-content"><b>HYGIECODE LMC</b>
-                                            <p>24 030 ₽</p>
-                                        </div></a></li>
-                                <li><a href="#">
-                                        <div class="main__search-thumb"> <img src="img/product/mini.jpg"></div>
-                                        <div class="main__search-content"><b>HYGIECODE LMC</b>
-                                            <p>24 030 ₽</p>
-                                        </div></a></li>
-                                <li><a href="#">
-                                        <div class="main__search-thumb"> <img src="img/product/mini.jpg"></div>
-                                        <div class="main__search-content"><b>HYGIECODE LMC</b>
-                                            <p>24 030 ₽</p>
-                                        </div></a></li>
-                                <li><a href="#">
-                                        <div class="main__search-thumb"> <img src="img/product/mini.jpg"></div>
-                                        <div class="main__search-content"><b>HYGIECODE LMC</b>
-                                            <p>24 030 ₽</p>
-                                        </div></a></li>
-                                <li><a href="#">
-                                        <div class="main__search-thumb"> <img src="img/product/mini.jpg"></div>
-                                        <div class="main__search-content"><b>HYGIECODE LMC</b>
-                                            <p>24 030 ₽</p>
-                                        </div></a></li>
-                                <li><a href="#">
-                                        <div class="main__search-thumb"> <img src="img/product/mini.jpg"></div>
-                                        <div class="main__search-content"><b>HYGIECODE LMC</b>
-                                            <p>24 030 ₽</p>
-                                        </div></a></li>
-                            </ul>
+                        <div class="main__search-list">
+                            <b>Товары</b>
+                            <div id="main__search_result"></div>
                         </div>
                     </div>
                 </div>

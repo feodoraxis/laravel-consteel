@@ -29,8 +29,6 @@ class Products extends Model
 
     const VIEWED_PRODUCTS_COOKIE_NAME = 'VIEWED_PRODUCTS';
 
-    const SEARCH_VARCHAR_NAME = 'search';
-
     private $posts_per_page  = 16;
     private $current_page    = 1;
     private $categories      = [];
@@ -114,6 +112,63 @@ class Products extends Model
         return $viewed_products;
     }
 
+    public function getByIds( array $ids ):array
+    {
+        $result = self::query()
+            ->whereIn('id', $ids)
+            ->get();
+
+        $result = self::handleObjects($result);
+
+        foreach ( $result as &$item ) {
+            $this->handleCharacteristics($item);
+        }
+
+        return $result;
+    }
+
+    private function handleCharacteristics(&$result)
+    {
+        if ( empty($result['characteristics']) ) {
+            return;
+        }
+
+        $result['characteristics'] = json_decode($result['characteristics'], true);
+
+        if ( !isset($result['characteristics']) || empty($result['characteristics']) || !is_array($result['characteristics']) || json_last_error() ) {
+            return;
+        }
+
+        $chars_ids = $characteristics = [];
+
+        foreach ($result['characteristics'] as $characteristic) {
+            foreach ( $characteristic as $key => $item ) {
+                $chars_ids[] = $key;
+                $characteristics[ $key ] = $item;
+            }
+        }
+        $result['characteristics'] = $characteristics;
+        $characteristics = [];
+
+        $parameters = Products_characteristics_options::getbyIds( $chars_ids );
+
+        if ( empty($parameters) ) {
+            return $result;
+        }
+
+        foreach ($parameters as $parameter) {
+            $characteristics[ $parameter['id'] ] = array_merge($parameter, [
+                'value' => $result['characteristics'][ $parameter['id'] ]
+            ]);
+
+            if ( self::PARAMETER_BRAND_ID == $parameter['id'] ) {
+                $result['brand'] = $characteristics[ $parameter['id'] ];
+            }
+        }
+
+        $result['characteristics'] = $characteristics;
+    }
+
     /**
      * @param $slug
      * @return array
@@ -126,40 +181,7 @@ class Products extends Model
 
         $result = self::handleObjects($result, false);
 
-        if ( !empty($result['characteristics']) ) {
-            $result['characteristics'] = json_decode($result['characteristics'], true);
-
-            if ( isset($result['characteristics']) && !empty($result['characteristics']) && is_array($result['characteristics']) && !json_last_error() ) {
-
-                $chars_ids = $characteristics = [];
-
-                foreach ($result['characteristics'] as $characteristic) {
-                    foreach ( $characteristic as $key => $item ) {
-                        $chars_ids[] = $key;
-                        $characteristics[ $key ] = $item;
-                    }
-                }
-                $result['characteristics'] = $characteristics;
-                $characteristics = [];
-
-                $parameters = Products_characteristics_options::getbyIds( $chars_ids );
-
-                if ( empty($parameters) ) {
-                    return $result;
-                }
-
-                foreach ($parameters as $parameter) {
-                    $characteristics[ $parameter['id'] ] = array_merge($parameter, [
-                        'value' => $result['characteristics'][ $parameter['id'] ]
-                    ]);
-
-                    if ( self::PARAMETER_BRAND_ID == $parameter['id'] ) {
-                        $result['brand'] = $characteristics[ $parameter['id'] ];
-                    }
-                }
-                $result['characteristics'] = $characteristics;
-            }
-        }
+        $this->handleCharacteristics($result);
 
         if ( intval($result['category']) > 0 ) {
             $similar_products = self::query()
@@ -255,6 +277,124 @@ class Products extends Model
     }
 
     /**
+     * @param string $search_request
+     * @param bool $need_categories
+     * @return array
+     */
+    public function getListBySearchRequest( string $search_request, bool $need_categories = false ) : array
+    {
+        $offset = ($this->current_page-1) * $this->posts_per_page;
+
+        $select = ['*'];
+        $where = [
+            ['name', 'like', "%{$search_request}%"],
+            ['status', '=', self::STATUS_PUBLISHED]
+        ];
+        $orderby = '.sort';
+
+        if ( $need_categories === true ) {
+            $category_table_name = Products_category::getTableName();
+            $self_table_name = self::getTable();
+
+            $select = [
+                $self_table_name . ".id",
+                $self_table_name . ".name",
+                $self_table_name . ".slug",
+                $self_table_name . ".status",
+                $self_table_name . ".sort",
+                $self_table_name . ".price",
+                $self_table_name . ".category",
+                $self_table_name . ".thumbnail_preview",
+                $category_table_name . '.id as category_id',
+                $category_table_name . '.slug as category_slug',
+                $category_table_name . '.name as category_name',
+            ];
+
+            $where = [
+                [$self_table_name . '.name', 'like', "%{$search_request}%"],
+                [$self_table_name . '.status', '=', self::STATUS_PUBLISHED]
+            ];
+
+            $orderby = $self_table_name . '.sort';
+        }
+
+        $query = self::query()
+            ->select($select)
+            ->where($where);
+
+        if ( $need_categories === true ) {
+            $query->leftJoin($category_table_name , self::getTable() . '.category' , '=' , $category_table_name . '.id');
+        }
+
+        $result = $query->orderBy($orderby)
+            ->offset( $offset )
+            ->limit( $this->posts_per_page )
+            ->get();
+
+        $result = self::handleObjects($result);
+
+        if ( $need_categories === false ) {
+            return $result;
+        }
+
+        if ( empty($result) ) {
+            return [];
+        }
+
+        $output = [];
+        foreach ( $result as $item ) {
+            $output['products'][] = [
+                'id' => $item['id'],
+                'name' => $item['name'],
+                'slug' => $item['slug'],
+                'sort' => $item['sort'],
+                'price' => $item['price'],
+                'link' => $item['link'],
+                'thumbnail_preview' => $item['thumbnail_preview'],
+            ];
+
+            $output['categories'][ $item['category_id'] ] = [
+                'id' => $item['category_id'],
+                'link' => Products_category::getLink( ['field' => 'slug', 'value' => $item['category_slug'] ] ),
+                'name' => $item['category_name'],
+            ];
+        }
+
+        return $output;
+    }
+
+    public function listRenderSearchPreview( array $data ):string
+    {
+        if ( empty($data['products']) ) {
+            return '';
+        }
+
+        $output = '<div class="main__search-categories">
+                    <b>Категории</b>
+                    <div class="catalog__categoryes">
+                        <ul>';
+
+        foreach ( $data['categories'] as $category ) {
+            $output .= '<li><a class="before" href="' . $category['link'] . '">' . $category['name'] . '</a></li>';
+        }
+
+        $output .= '</ul>
+                </div>
+            </div>
+            <div class="main__search-list">
+                <b>Товары</b>
+                <ul>';
+
+        foreach ( $data['products'] as $product ) {
+            $output .= view("catalog.preview-search", ['item' => $product]);
+        }
+
+        $output .= '</ul></div>';
+
+        return $output;
+    }
+
+    /**
      * @param int $category_id
      * @return array
      */
@@ -324,11 +464,8 @@ class Products extends Model
                             }
 
                         }
-
                     }
-
                 }
-
             }
         }
 
@@ -379,7 +516,7 @@ class Products extends Model
                                         data-type="catalog"
                                         data-category="' . $category_id . '"
                                         data-current_page="' . $this->current_page . '"
-                                        data-max="' . $pages . '",
+                                        data-max="' . $pages . '"
                                         data-csrf="' . csrf_token() . '">Показать ещё</button>
                                 </div>
                                 <div class="pagination-list">
@@ -406,6 +543,61 @@ class Products extends Model
     }
 
     /**
+     * @param string $search_request
+     * @return string
+     */
+    public function paginationBySearchRequest( string $search_request ):string
+    {
+        $count = self::query()
+            ->where([
+                ['name', 'like', "%{$search_request}%"],
+                ['status', '=', self::STATUS_PUBLISHED],
+            ])
+            ->count();
+
+        if ( $count <= $this->posts_per_page ) {
+            return '';
+        }
+
+        $pages = ceil($count / $this->posts_per_page);
+
+        $output = '<div class="wrapper">
+                    <div class="catalog-pagintaion">
+                        <div class="pagination" id="pagination">
+                            <div class="pagination-flexbox">
+                                <div class="pagination-upload">
+                                    <button class="button button-show_more" id="show_more_search"
+
+                                        data-type="catalog"
+                                        data-request="' . $search_request . '"
+                                        data-current_page="' . $this->current_page . '"
+                                        data-max="' . $pages . '"
+                                        data-csrf="' . csrf_token() . '">Показать ещё</button>
+                                </div>
+                                <div class="pagination-list">
+                                    <ul>';
+
+        $parse_url = parse_url($_SERVER['REQUEST_URI']);
+
+        for ( $i = 1; $i <= $pages; $i++ ) {
+            if ( $i == $this->current_page ) {
+                $output .= '<li data-num="' . $i . '" class="active"><span>' . $i . '</span></li>';
+            } else {
+                $output .= '<li data-num="' . $i . '"><a href="' . $parse_url['path'] . '?' . Catalog::SEARCH_VARCHAR_NAME . '=' . $search_request . '&PAGE=' . $i . '"><span>' . $i . '</span></a></li>';
+            }
+        }
+
+        $output .= '      </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>';
+
+        return $output;
+    }
+
+    /**
      * @param $objects
      * @param bool $multiple
      * @return array
@@ -413,6 +605,7 @@ class Products extends Model
     private function handleObjects($objects, bool $multiple = true) : array
     {
         $objects = json_decode($objects, true);
+        $compare = new Compare();
 
         if (empty($objects) || json_last_error()) {
             return [];
@@ -420,9 +613,28 @@ class Products extends Model
 
         foreach ($objects as &$item) {
             $item['link'] = self::getLink($item['category'], $item['slug']);
-            $item['thumbnail_preview'] = Media::getThumbnailData($item['thumbnail_preview']);
-            $item['thumbnail_detail'] = Media::getThumbnailData($item['thumbnail_detail']);
-            $item['price'] = self::handlePrice($item['price']);
+
+            if ( $item['category'] ) {
+                $item['category'] = Products_category::getCategoryBy('id', $item['category']);
+            }
+
+            if ( isset($item['thumbnail_preview']) ) {
+                $item['thumbnail_preview'] = Media::getThumbnailData($item['thumbnail_preview']);
+            } else {
+                $item['thumbnail_preview'] = '';
+            }
+
+            if ( isset($item['thumbnail_detail']) ) {
+                $item['thumbnail_detail'] = Media::getThumbnailData($item['thumbnail_detail']);
+            } else {
+                $item['thumbnail_detail'] = '';
+            }
+
+            if ( isset($item['price']) && !empty($item['price']) && $item['price'] !== '0.00' ) {
+                $item['price'] = self::handlePrice($item['price']);
+            } else {
+                $item['price'] = '';
+            }
 
             if ( $multiple === false ) {
 
@@ -439,6 +651,13 @@ class Products extends Model
             if ( !empty($item['price_discount']) && $item['price_discount'] !== '0.00' ) {
                 $item['price_discount'] = self::handlePrice($item['price_discount'], $multiple);
             }
+
+            if ( $compare->isInCompare( $item['id'] ) ) {
+                $item['compare_class'] = ' active';
+            } else {
+                $item['compare_class'] = '';
+            }
+
         }
         unset($item);
 
