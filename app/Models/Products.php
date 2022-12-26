@@ -435,6 +435,7 @@ class Products extends Model
         }
 
         $chars_ids = $chars_values = $check_chars_values = [];
+
         foreach ( $data as $item ) {
             $characteristics = json_decode($item['characteristics'], true);
 
